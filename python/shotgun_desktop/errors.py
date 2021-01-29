@@ -113,6 +113,23 @@ class UpgradeCorePython3Error(ShotgunDesktopError):
         )
 
 
+class OlderCoreNotSupportingWebAuthError(ShotgunDesktopError):
+    """
+    This exception notifies the catcher that the site configuration uses a core too old
+    for web based authentication in a PySide2 build of Desktop.
+    """
+
+    def __init__(self, core_version, desktop_version):
+        """Constructor"""
+        ShotgunDesktopError.__init__(
+            self,
+            "Browser based authentication is not supported with a site configuration "
+            "that uses tk-core '{}' and Shotgun Desktop '{}'. Please upgrade the "
+            "version of tk-core to 'v0.19.16' or more recent or downgrade Shotgun Desktop "
+            "to a version earlier than 'v1.6.1'.".format(core_version, desktop_version),
+        )
+
+
 class UpgradeEngine200Error(ShotgunDesktopError):
     """
     This exception notifies the catcher that the site's desktop engine needs to be upgraded in order

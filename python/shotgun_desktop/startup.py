@@ -126,6 +126,7 @@ from shotgun_desktop.errors import (
     UpgradeCoreError,
     UpgradeCorePython3Error,
     InvalidPipelineConfiguration,
+    OlderCoreNotSupportingWebAuthError,
 )
 
 from tank.util.version import (
@@ -133,6 +134,7 @@ from tank.util.version import (
     is_version_newer_or_equal,
 )
 
+from sgtk import support_url
 
 global_debug_flag_at_startup = None
 
@@ -377,7 +379,9 @@ def __launch_app(app, splash, user, app_bootstrap, settings):
     del sgtk
     try:
         if toolkit_classic_required:
-            engine = __start_engine_in_toolkit_classic(app, splash, user, pc, pc_path)
+            engine = __start_engine_in_toolkit_classic(
+                app, app_bootstrap, splash, user, pc, pc_path
+            )
         else:
             engine = __start_engine_in_zero_config(app, app_bootstrap, splash, user)
     except SyntaxError:
@@ -432,7 +436,7 @@ def __bootstrap_progress_callback(splash, app, progress_value, message):
     logger.debug(message)
 
 
-def __start_engine_in_toolkit_classic(app, splash, user, pc, pc_path):
+def __start_engine_in_toolkit_classic(app, app_bootstrap, splash, user, pc, pc_path):
     """
     Create a Toolkit instance by boostraping into the pipeline configuration.
 
@@ -465,6 +469,9 @@ def __start_engine_in_toolkit_classic(app, splash, user, pc, pc_path):
         """
         # If the pipeline configuration found in Shotgun doesn't match what we have locally, we have a
         # problem.
+        if isinstance(user, sgtk.authentication.ShotgunWebUser):
+            __is_core_compatible_with_sso(app_bootstrap, ctx.sgtk)
+
         if pc["id"] != ctx.sgtk.pipeline_configuration.get_shotgun_id():
             raise InvalidPipelineConfiguration(pc, ctx.sgtk.pipeline_configuration)
 
@@ -502,6 +509,23 @@ def __start_engine_in_toolkit_classic(app, splash, user, pc, pc_path):
     return engine
 
 
+def __is_core_compatible_with_sso(app_bootstrap, sgtk):
+    """
+    Ensure the core we swapped to is compatible with web login and the version of PySide
+    bundled with Shotgun Desktop.
+    """
+    if not is_version_newer_or_equal(app_bootstrap.get_version(), "v1.6.1"):
+        return
+
+    # We're running Shotgun Desktop 1.6.1, which ships with PySide2
+    # If we're on an SSO site, we need to make sure that the tk-core
+    # is recent enough to support SSO with PySide2.
+    if is_version_newer_or_equal(sgtk.version, "v0.19.16"):
+        return
+
+    raise OlderCoreNotSupportingWebAuthError(sgtk.version, app_bootstrap.get_version())
+
+
 def __start_engine_in_zero_config(app, app_bootstrap, splash, user):
     """
     Launch into the engine using the new zero config based bootstrap.
@@ -534,7 +558,12 @@ def __start_engine_in_zero_config(app, app_bootstrap, splash, user):
     if bundle_cache_path:
         mgr.bundle_cache_fallback_paths.append(bundle_cache_path)
 
-    mgr.pre_engine_start_callback = lambda ctx: __restore_global_debug_flag()
+    def pre_engine_start_callback(ctx):
+        if isinstance(user, sgtk.authentication.ShotgunWebUser):
+            __is_core_compatible_with_sso(app_bootstrap, ctx.sgtk)
+        __restore_global_debug_flag()
+
+    mgr.pre_engine_start_callback = pre_engine_start_callback
 
     return mgr.bootstrap_engine("tk-desktop")
 
@@ -678,7 +707,7 @@ def __handle_unexpected_exception(
         "we'll help you diagnose the issue.\n"
         "Error: {error}\n"
         "For more information, see the log file at {log}.".format(
-            link=sgtk.support_url, error=str(error_message), log=log_location,
+            link=support_url, error=str(error_message), log=log_location,
         ),
         detailed_text="".join(
             traceback.format_exception(exc_type, exc_value, exc_traceback)
