@@ -109,6 +109,9 @@ def add_to_python_path(bundled_path, env_var_override, module_name):
 # Add Toolkit to the path.
 add_to_python_path(os.path.join("..", "tk-core",), "SGTK_CORE_LOCATION", "tk-core")
 
+from . import rez_environment
+rez_environment.resolve_rez_environment(["shell_env"])
+
 # now proceed with non builtin imports
 from .qt import QtCore, QtGui
 
@@ -355,7 +358,7 @@ def __launch_app(app, splash, user, app_bootstrap, settings):
         pc_path,
         pc,
         toolkit_classic_required,
-    ) = shotgun_desktop.paths.get_pipeline_configuration_info(connection)
+    ) = shotgun_desktop.paths.get_pipeline_configuration_info(connection, user)
 
     # We need to toggle the global debug logging setting back prior to swapping
     # core. Cores older than v0.18.117 do not manage the TK_DEBUG environment

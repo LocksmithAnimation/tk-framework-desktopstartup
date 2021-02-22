@@ -1,157 +1,61 @@
 # Copyright (c) 2013 Shotgun Software Inc.
-#
+# 
 # CONFIDENTIAL AND PROPRIETARY
-#
-# This work is provided "AS IS" and subject to the Shotgun Pipeline Toolkit
+# 
+# This work is provided "AS IS" and subject to the Shotgun Pipeline Toolkit 
 # Source Code License included in this distribution package. See LICENSE.
-# By accessing, using, copying or modifying this work you indicate your
-# agreement to the Shotgun Pipeline Toolkit Source Code License. All rights
+# By accessing, using, copying or modifying this work you indicate your 
+# agreement to the Shotgun Pipeline Toolkit Source Code License. All rights 
 # not expressly granted therein are reserved by Shotgun Software Inc.
 
-# Toolkit core API version
-__version__ = "HEAD"
 
-########################################################################
-# Establish pipeline configuration context if needed
-#
-# When the tank command executes, or when the python API is imported
-# via the API proxy that is available with every non-localized pipeline config,
-# an environment variable TANK_CURRENT_PC, is set, pointing at the configuration
-# associated with the currently running config. This is to ensure that the right
-# version of the code is associated with the currently running project
-# configuration.
-#
-# However, in the case when a cloned configuration has been localized,
-# the API proxy has been replaced by the actual core API code.
-# In this case, we will set the TANK_CURRENT_PC explicitly.
-#
-# The logic below is fundamentally to avoid the issue that when a cloned localized
-# configuration has its python sgtk/tank module imported directly, it will associate
-# itself with the primary config rather than with the config where the code is located.
+# thin proxy wrapper which finds the real tank and replaces itself with that
 
 import os
 import sys
-import uuid
-import inspect
+try:
+    from importlib import reload
+except ImportError:
+    pass
 
+# first look for our parent file
+current_folder = os.path.abspath(os.path.dirname(__file__))
+file_name_lookup = {"linux2": "core_Linux.cfg", "win32": "core_Windows.cfg", "darwin": "core_Darwin.cfg" }
+parent_file_name =  file_name_lookup[sys.platform]
+parent_cfg_path = os.path.join(current_folder, "..", "..", parent_file_name)
+parent_cfg_path = os.path.abspath(parent_cfg_path)
 
-def __fix_tank_vendor():
-    # Older versions of Shotgun Desktop left copies of tank_vendor in sys.modules,
-    # which means we might not be importing our copy but someone else's,
-    # so strip it out!
-    if "tank_vendor" not in sys.modules:
-        return
+if not os.path.exists(parent_cfg_path):
+    raise Exception("Sgtk: Cannot find referenced core configuration file '%s'!" % parent_cfg_path)
 
-    # Figure out where our tank_vendor is.
-    our_tank_vendor = os.path.normpath(
-        os.path.join(os.path.dirname(os.path.dirname(__file__)), "tank_vendor")
-    )
+# now read our parent file
+fh = open(parent_cfg_path, "rt")
+try:
+    parent_path = fh.readline().strip()
+    # expand any env vars that are used in the files. For example, you could have 
+    # an env variable $STUDIO_TANK_PATH=/sgtk/software/shotgun/studio and your
+    # and your parent file may just contain "$STUDIO_TANK_PATH" instead of an 
+    # explicit path.
+    parent_path = os.path.expandvars(parent_path)
+finally:
+    fh.close()
 
-    tank_vendor = sys.modules["tank_vendor"]
+parent_python_path = os.path.join(parent_path, "install", "core", "python") 
 
-    # If the tank_vendor that is loaded is ours, we're good!
-    if os.path.normpath(inspect.getsourcefile(tank_vendor)) == our_tank_vendor:
-        return
+if not os.path.exists(parent_python_path):
+    raise Exception("Sgtk: Cannot find referenced core location '%s'" % parent_python_path)
 
-    __prefix = "_tank_vendor_swap_%s" % uuid.uuid4().hex
+# set up an env var to track the current pipeline configuration
+# this is to help the tank core API figure out for example tank.tank_from_path()
+# when using multiple work pipeline configurations for a single project
 
-    # We've loaded another tank_vendor, so let's strip out every single
-    # module that starts with tank_vendor
-    for name, module in list(sys.modules.items()):
-        # sys.modules can be assigned anything, even None or a number
-        # so avoid those.
-        if isinstance(name, str) is False or name.startswith("tank_vendor") is False:
-            continue
+# make sure the TANK_CURRENT_PC points at the root of this pipeline configuration
+pipeline_config = os.path.join(current_folder, "..", "..", "..", "..")
+pipeline_config = os.path.abspath(pipeline_config)
+os.environ["TANK_CURRENT_PC"] = pipeline_config
 
-        # Move tank_vendor out of the way instead of simply removing it from sys.modules.
-        # If the modules are still in use, removing them from sys.modules seems to do
-        # some cleanup of the modules themselves, which we do not want. For example,
-        # if a Shotgun connection is still used from the old tank_vendor after the swap
-        # happened, then the global methods from shotgun.py like _translate_filters
-        # will turn to None. It's all a bit mysterious to be honest, but considering we're
-        # also following the same pattern in bootstrap/import_handler.py, it seems
-        # like this is the safe way to fix this.
-        sys.modules[__prefix + name] = sys.modules.pop(name)
-
-
-__fix_tank_vendor()
-
-del __fix_tank_vendor
-
-
-if "TANK_CURRENT_PC" not in os.environ:
-    # find the pipeline configuration root, probe for a key file
-    # (templates.yml) and use this test to determine if this code is
-    # a core API located inside a pipeline configuration.
-    #
-    # NOTE! This is a very particular piece of logic, which is also
-    # duplicated inside the tank command and the python proxy wrappers.
-    # it is intentionally left here in the init method to highlight that
-    # is unique and special.
-    #
-    from . import constants
-
-    current_folder = os.path.abspath(os.path.dirname(__file__))
-    pipeline_config = os.path.abspath(
-        os.path.join(current_folder, "..", "..", "..", "..")
-    )
-    roots_file = os.path.join(
-        pipeline_config, "config", "core", constants.STORAGE_ROOTS_FILE
-    )
-    if os.path.exists(roots_file):
-        os.environ["TANK_CURRENT_PC"] = pipeline_config
-
-########################################################################
-
-# first import the log manager since a lot of modules require this.
-from .log import LogManager
-
-# make sure that all sub-modules are imported at the same as the main module
-from . import authentication
-from . import descriptor
-from . import bootstrap
-from . import commands
-from . import deploy
-from . import folder
-from . import platform
-from . import util
-
-# core functionality
-from .api import (
-    Tank,
-    tank_from_path,
-    tank_from_entity,
-    set_authenticated_user,
-    get_authenticated_user,
-)
-from .api import Sgtk, sgtk_from_path, sgtk_from_entity
-from .pipelineconfig_utils import (
-    get_python_interpreter_for_config,
-    get_core_python_path_for_config,
-    get_sgtk_module_path,
-)
-
-from .context import Context
-
-from .errors import (
-    TankError,
-    TankErrorProjectIsSetup,
-    TankHookMethodDoesNotExistError,
-    TankFileDoesNotExistError,
-    TankUnreadableFileError,
-    TankInvalidInterpreterLocationError,
-    TankInvalidCoreLocationError,
-    TankNotPipelineConfigurationError,
-)
-
-# note: TankEngineInitError used to reside in .errors but was moved into platform.errors
-from .platform.errors import TankEngineInitError
-from .template import Template, TemplatePath, TemplateString
-from .hook import Hook, get_hook_baseclass
-
-from .commands import list_commands, get_command, SgtkSystemCommand, CommandInteraction
-
-from .templatekey import TemplateKey, SequenceKey, IntegerKey, StringKey, TimestampKey
-
-# expose the support url
-from .constants import SUPPORT_URL as support_url
+# ok we got the parent location
+# prepend this to the python path and reload the module
+# this way we will load the 'real' tank! 
+os.sys.path.insert(0, parent_python_path)
+reload(sys.modules["tank"])

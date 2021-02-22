@@ -19,7 +19,7 @@ from sgtk import LogManager
 logger = LogManager.get_logger(__name__)
 
 
-def get_pipeline_configuration_info(connection):
+def get_pipeline_configuration_info(connection, user=None):
     """
     Finds the site configuration root on disk.
 
@@ -45,6 +45,7 @@ def get_pipeline_configuration_info(connection):
         "project",
         "sg_plugin_ids",
         "plugin_ids",
+        "users"
     ]
 
     # Find the right pipeline configuration. We'll always pick a projectless
@@ -101,8 +102,22 @@ def get_pipeline_configuration_info(connection):
     if len(pcs) == 0:
         pc = None
     else:
-        # Pick the last result. See the big comment before the Shotgun query to understand.
-        pc = pcs[-1]
+        if user:
+            human_user = connection.find_one("HumanUser", [["login", "is", user.login]])
+            global_pc = None
+            for pc in pcs:
+                if not pc["users"]:
+                    global_pc = pc
+                if human_user["id"] in [x["id"] for x in pc["users"]]:
+                    break
+            else:
+                if global_pc:
+                    pc = global_pc
+                else:
+                    pc = None
+        if not pc:
+            # Pick the last result. See the big comment before the Shotgun query to understand.
+            pc = pcs[-1]
         # It is possible to get multiple pipeline configurations due to user error.
         # Log a warning if there was more than one pipeline configuration found.
         if len(pcs) > 1:

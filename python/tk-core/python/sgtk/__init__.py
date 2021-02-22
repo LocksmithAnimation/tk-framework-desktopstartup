@@ -1,43 +1,62 @@
 # Copyright (c) 2013 Shotgun Software Inc.
-#
+# 
 # CONFIDENTIAL AND PROPRIETARY
-#
-# This work is provided "AS IS" and subject to the Shotgun Pipeline Toolkit
+# 
+# This work is provided "AS IS" and subject to the Shotgun Pipeline Toolkit 
 # Source Code License included in this distribution package. See LICENSE.
-# By accessing, using, copying or modifying this work you indicate your
-# agreement to the Shotgun Pipeline Toolkit Source Code License. All rights
+# By accessing, using, copying or modifying this work you indicate your 
+# agreement to the Shotgun Pipeline Toolkit Source Code License. All rights 
 # not expressly granted therein are reserved by Shotgun Software Inc.
 
 
-ALT_API_NAME = "tank"
-THIS_MODULE_NAME = "sgtk"
+# thin proxy wrapper which finds the real sgtk and replaces itself with that
 
-# first import our alternative API
-import tank
-
-# now go through and duplicate all entries in sys.modules
+import os
 import sys
+try:
+    from importlib import reload
+except ImportError:
+    pass
 
-# Generate a list of keys to iterate over,
-# since we'll be mutating the dict as we iterate.
-for x in list(sys.modules.keys()):
+# first look for our parent file
+current_folder = os.path.abspath(os.path.dirname(__file__))
+file_name_lookup = {"linux2": "core_Linux.cfg", "win32": "core_Windows.cfg", "darwin": "core_Darwin.cfg" }
+parent_file_name =  file_name_lookup[sys.platform]
+parent_cfg_path = os.path.join(current_folder, "..", "..", parent_file_name)
+parent_cfg_path = os.path.abspath(parent_cfg_path)
 
-    if x.startswith("%s." % ALT_API_NAME):
-        # this is a submodule inside the alternative API
-        # create a copy in sys.modules with our own name
-        new_name = "%s.%s" % (THIS_MODULE_NAME, x[len(ALT_API_NAME) + 1 :])
-        sys.modules[new_name] = sys.modules[x]
+if not os.path.exists(parent_cfg_path):
+    raise Exception("Sgtk: Cannot find referenced core configuration file '%s'!" % parent_cfg_path)
 
-    elif x == ALT_API_NAME:
-        # this is the actual alternative module
-        # remap that too - this means we are remapping ourselves...
-        sys.modules[THIS_MODULE_NAME] = sys.modules[x]
-        # now ensure that the other module has sys imported,
-        # otherwise we can no longer access sys or any of the predefined variables
-        # beyond this point.
-        ALT_API_NAME = "tank"
-        THIS_MODULE_NAME = "sgtk"
-        import sys
+# now read our parent file
+fh = open(parent_cfg_path, "rt")
+try:
+    parent_path = fh.readline().strip()
+    # expand any env vars that are used in the files. For example, you could have 
+    # an env variable $STUDIO_TANK_PATH=/sgtk/software/shotgun/studio and your
+    # and your parent file may just contain "$STUDIO_TANK_PATH" instead of an 
+    # explicit path.
+    parent_path = os.path.expandvars(parent_path)
+finally:
+    fh.close()
 
-# lastly, remap the globals accessor to point at our new module
-globals()[THIS_MODULE_NAME] = sys.modules[THIS_MODULE_NAME]
+parent_python_path = os.path.join(parent_path, "install", "core", "python") 
+
+if not os.path.exists(parent_python_path):
+    raise Exception("Sgtk: Cannot find referenced core location '%s'" % parent_python_path)
+
+# set up an env var to track the current pipeline configuration
+# this is to help the tank core API figure out for example tank.tank_from_path()
+# when using multiple work pipeline configurations for a single project
+
+# make sure the TANK_CURRENT_PC points at the root of this pipeline configuration
+pipeline_config = os.path.join(current_folder, "..", "..", "..", "..")
+pipeline_config = os.path.abspath(pipeline_config)
+os.environ["TANK_CURRENT_PC"] = pipeline_config
+
+# ok we got the parent location
+# prepend this to the python path and reload the module
+# this way we will load the 'real' tank! 
+os.sys.path.insert(0, parent_python_path)
+reload(sys.modules["sgtk"])
+
