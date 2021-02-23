@@ -31,6 +31,4 @@ except ImportError:
 def resolve_rez_environment(package_list):
     from rez.resolved_context import ResolvedContext
     context = ResolvedContext(package_list, caching=False)
-    current_python_path = sys.path.copy()
     context.apply()
-    sys.path.extend(current_python_path)

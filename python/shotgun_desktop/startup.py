@@ -110,7 +110,9 @@ def add_to_python_path(bundled_path, env_var_override, module_name):
 add_to_python_path(os.path.join("..", "tk-core",), "SGTK_CORE_LOCATION", "tk-core")
 
 from . import rez_environment
-rez_environment.resolve_rez_environment(["shell_env"])
+current_python_path = sys.path.copy()
+rez_environment.resolve_rez_environment(["locksmith"])
+sys.path.extend(current_python_path)
 
 # now proceed with non builtin imports
 from .qt import QtCore, QtGui
@@ -557,10 +559,7 @@ def __post_bootstrap_engine(splash, app_bootstrap, engine, settings):
     import sgtk
 
     # reset PYTHONPATH and PYTHONHOME if they were overridden by the application
-    if "SGTK_DESKTOP_ORIGINAL_PYTHONPATH" in os.environ:
-        os.environ["PYTHONPATH"] = os.environ["SGTK_DESKTOP_ORIGINAL_PYTHONPATH"]
-    if "SGTK_DESKTOP_ORIGINAL_PYTHONHOME" in os.environ:
-        os.environ["PYTHONHOME"] = os.environ["SGTK_DESKTOP_ORIGINAL_PYTHONHOME"]
+    rez_environment.resolve_rez_environment(["shell_env"])
 
     # and run the engine
     logger.debug("Running tk-desktop")
