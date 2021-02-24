@@ -32,3 +32,19 @@ def resolve_rez_environment(package_list):
     from rez.resolved_context import ResolvedContext
     context = ResolvedContext(package_list, caching=False)
     context.apply()
+
+
+def combine_in_sys_path(package_list):
+    from rez.resolved_context import ResolvedContext
+    context = ResolvedContext(package_list, caching=False)
+    for path in context.get_environ().get("PYTHONPATH", "").split(";"):
+        if path not in sys.path:
+            sys.path.append(path)
+
+def combine_environments(package_list, parent_variables):
+    from rez.resolved_context import ResolvedContext
+    from rez.config import config
+    current_path = sys.path
+    config.parent_variables = parent_variables
+    resolve_rez_environment(package_list)
+    sys.path.extend(current_path)
