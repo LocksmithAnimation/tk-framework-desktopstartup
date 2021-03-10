@@ -557,7 +557,10 @@ def __post_bootstrap_engine(splash, app_bootstrap, engine, settings):
     import sgtk
 
     # reset PYTHONPATH and PYTHONHOME if they were overridden by the application
-    rez_environment.combine_environments(["desktop_env"], [])
+    if "SGTK_DESKTOP_ORIGINAL_PYTHONPATH" in os.environ:
+        os.environ["PYTHONPATH"] = os.environ["SGTK_DESKTOP_ORIGINAL_PYTHONPATH"]
+    if "SGTK_DESKTOP_ORIGINAL_PYTHONHOME" in os.environ:
+        os.environ["PYTHONHOME"] = os.environ["SGTK_DESKTOP_ORIGINAL_PYTHONHOME"]
 
     # and run the engine
     logger.debug("Running tk-desktop")

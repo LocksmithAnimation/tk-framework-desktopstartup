@@ -26,13 +26,12 @@ except ImportError:
         rez_python = os.path.join(rez_path, "python")
         if rez_python not in sys.path:
             sys.path.append(rez_python)
-
-
-def resolve_rez_environment(package_list):
-    from rez.resolved_context import ResolvedContext
-    context = ResolvedContext(package_list, caching=False)
-    context.apply()
-
+        if "SGTK_DESKTOP_ORIGINAL_PYTHONPATH" in os.environ:
+            ";".join([os.environ["SGTK_DESKTOP_ORIGINAL_PYTHONPATH"], rez_python])
+        elif "PYTHONPATH" in os.environ:
+            ";".join([os.environ["PYTHONPATH"], rez_python])
+        else:
+            os.environ["PYTHONPATH"] = rez_python
 
 def combine_in_sys_path(package_list):
     from rez.resolved_context import ResolvedContext
@@ -40,11 +39,3 @@ def combine_in_sys_path(package_list):
     for path in context.get_environ().get("PYTHONPATH", "").split(";"):
         if path not in sys.path:
             sys.path.append(path)
-
-def combine_environments(package_list, parent_variables):
-    from rez.resolved_context import ResolvedContext
-    from rez.config import config
-    current_path = sys.path
-    config.parent_variables = parent_variables
-    resolve_rez_environment(package_list)
-    sys.path.extend(current_path)
