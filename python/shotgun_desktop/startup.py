@@ -19,6 +19,31 @@ import traceback
 # initialize logging
 import logging
 
+# The value of sys.executable under multiple platforms and multiple versions
+# of Desktop is unreliable. Therefore, we're patch the value if the executable
+# name is not Shotgun or ShotGrid.
+#
+# So, we'll use sys.prefix which is properly set and backtrack to the executable.
+# When the executable is fixed we should come back here and put a check for the version
+# number so we stop updating sys.executable
+
+# Grab the name and the executable
+executable_name, ext = os.path.splitext(os.path.basename(sys.executable or ""))
+
+# If the executable is not named Shotgun or ShotGrid, then we need to patch sys.executable.
+if executable_name.lower() not in ["shotgun", "shotgrid"]:
+    # On macOS, sys.prefix is set to /Applications/Shotgun.app/Contents/Resources/python,
+    # so we need to drill down differently for the executable folder than on other platforms
+    if sys.platform == "darwin":
+        bin_dir = os.path.join(sys.prefix, "..", "..", "MacOS")
+    else:
+        # On Linux and Windows, the sys.prefix points to Shotgun/Python, so we only
+        # need to move up one folder.
+        bin_dir = os.path.join(sys.prefix, "..")
+
+    # Set the executable name and make sure to put back in the extension for Windows.
+    sys.executable = os.path.normpath(os.path.join(bin_dir, "Shotgun%s" % ext))
+
 
 def _enumerate_per_line(items):
     """
@@ -345,7 +370,7 @@ def __launch_app(app, splash, user, app_bootstrap, settings):
         # debug logging until core swap, when the original launch setting is
         # restored.
         __restore_global_debug_flag()
-        __restart_app_with_countdown(splash, "Shotgun Desktop updated.")
+        __restart_app_with_countdown(splash, "ShotGrid Desktop updated.")
 
     splash.set_message("Looking up site configuration.")
 
@@ -498,7 +523,7 @@ def __start_engine_in_toolkit_classic(app, splash, user, pc, pc_path):
 
     if not __desktop_engine_supports_authentication_module(engine):
         raise UpgradeEngine200Error(
-            "This version of the Shotgun Desktop only supports tk-desktop engine 2.0.0 and higher.",
+            "This version of the ShotGrid Desktop only supports tk-desktop engine 2.0.0 and higher.",
             pc_path,
         )
 
@@ -643,7 +668,7 @@ def __handle_exception(splash, shotgun_authenticator, error_message):
     if splash:
         splash.hide()
     logger.exception("Fatal error, user will be logged out.")
-    DesktopMessageBox.critical("Shotgun Desktop Error", error_message)
+    DesktopMessageBox.critical("ShotGrid Desktop Error", error_message)
     # If we are logged in, we should log out so the user is not stuck in a loop of always
     # automatically logging in each time the app is launched again
     if shotgun_authenticator:
@@ -676,8 +701,8 @@ def __handle_unexpected_exception(
 
     logger.exception("Fatal error, user will be logged out.")
     DesktopMessageBox.critical(
-        "Shotgun Desktop Error",
-        "Something went wrong in the Shotgun Desktop! If you <a href={link}>contact us</a> "
+        "ShotGrid Desktop Error",
+        "Something went wrong in the ShotGrid Desktop! If you <a href={link}>contact us</a> "
         "we'll help you diagnose the issue.\n"
         "Error: {error}\n"
         "For more information, see the log file at {log}.".format(
