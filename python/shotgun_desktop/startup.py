@@ -494,7 +494,7 @@ def __start_engine_in_toolkit_classic(app, splash, user, pc, pc_path):
     # We need to validate a few things before the engine starts.
     mgr.pre_engine_start_callback = pre_engine_start_callback
 
-    engine = mgr.bootstrap_engine("tk-desktop")
+    engine = mgr.bootstrap_engine("tk-lsd")
 
     if not __desktop_engine_supports_authentication_module(engine):
         raise UpgradeEngine200Error(
@@ -539,7 +539,7 @@ def __start_engine_in_zero_config(app, app_bootstrap, splash, user):
 
     mgr.pre_engine_start_callback = lambda ctx: __restore_global_debug_flag()
 
-    return mgr.bootstrap_engine("tk-desktop")
+    return mgr.bootstrap_engine("tk-lsd")
 
 
 def __post_bootstrap_engine(splash, app_bootstrap, engine, settings):
