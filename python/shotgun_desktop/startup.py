@@ -132,7 +132,14 @@ def add_to_python_path(bundled_path, env_var_override, module_name):
 
 
 # Add Toolkit to the path.
-add_to_python_path(os.path.join("..", "tk-core",), "SGTK_CORE_LOCATION", "tk-core")
+add_to_python_path(
+    os.path.join(
+        "..",
+        "tk-core",
+    ),
+    "SGTK_CORE_LOCATION",
+    "tk-core",
+)
 
 from . import rez_environment
 rez_environment.combine_in_sys_path(["locksmith"])
@@ -477,8 +484,10 @@ def __start_engine_in_toolkit_classic(app, splash, user, pc, pc_path):
     mgr = sgtk.bootstrap.ToolkitManager(user)
     # Tell the manager to resolve the config in Shotgun so it can resolve the location on disk.
     mgr.do_shotgun_config_lookup = True
-    mgr.progress_callback = lambda progress_value, message: __bootstrap_progress_callback(
-        splash, app, progress_value, message
+    mgr.progress_callback = (
+        lambda progress_value, message: __bootstrap_progress_callback(
+            splash, app, progress_value, message
+        )
     )
     mgr.pipeline_configuration = pc["id"]
 
@@ -546,14 +555,27 @@ def __start_engine_in_zero_config(app, app_bootstrap, splash, user):
 
     mgr = sgtk.bootstrap.ToolkitManager(user)
 
+    # If 'SHOTGUN_PYTHON_VERSION' environment variable has been set, but at this point
+    # we are running in Python 3 we should warn the user that this will have no
+    # effect as there is no Python 2 version available.
+    if str(os.environ.get("SHOTGUN_PYTHON_VERSION")) == "2" and sys.version_info[0] > 2:
+        DesktopMessageBox.critical(
+            "ShotGrid Desktop Warning",
+            "{constant} will have no effect because there's not Python 2 available version.\n".format(
+                constant="SHOTGUN_PYTHON_VERSION"
+            ),
+        )
+
     # Allows to take over the site config to use with Desktop without impacting the projects
     # configurations.
     mgr.base_configuration = os.environ.get(
         "SHOTGUN_DESKTOP_CONFIG_FALLBACK_DESCRIPTOR",
         "sgtk:descriptor:app_store?name=tk-config-basic",
     )
-    mgr.progress_callback = lambda progress_value, message: __bootstrap_progress_callback(
-        splash, app, progress_value, message
+    mgr.progress_callback = (
+        lambda progress_value, message: __bootstrap_progress_callback(
+            splash, app, progress_value, message
+        )
     )
     mgr.plugin_id = "basic.desktop"
 
@@ -645,6 +667,24 @@ def __ensure_engine_compatible_with_qt_version(engine, app_version):
         raise EngineNotCompatibleWithDesktop16(app_version)
 
 
+def _is_pipeline_config_disabled(error_message):
+    """
+    Check if the 'PipelineConfiguration' entities has been
+    disabled from the user site.
+
+    :param error_message: The error string that will be displayed in a message box.
+    :returns: True if the error message matches with the expected pipeline config
+          disabled message.
+    """
+    # expected error message when 'PipelineConfiguration' entities has been
+    # disabled from the user site.
+    pipeline_config_disabled_message = (
+        "API read() invalid/missing string entity 'type':\n"
+        '{"type"=>"PipelineConfiguration"'
+    )
+    return pipeline_config_disabled_message in str(error_message)
+
+
 def _run_engine(engine, splash, startup_version, app_bootstrap, startup_desc, settings):
     __ensure_engine_compatible_with_qt_version(engine, app_bootstrap.get_version())
 
@@ -700,14 +740,38 @@ def __handle_unexpected_exception(
         log_location = app_bootstrap.get_logfile_location()
 
     logger.exception("Fatal error, user will be logged out.")
+
+    if _is_pipeline_config_disabled(error_message):
+        formatted_error_message = (
+            "PipelineConfiguration entities are disabled for your site. "
+            "Head to your <a href={link}>Site Preferences</a>, enable them and try again.\n"
+            "Error: {error}\n"
+            "For more information, see the log file at {log}.".format(
+                link=(
+                    "{shotgrid_base_url}/preferences".format(
+                        shotgrid_base_url=shotgun_authenticator.get_default_host()
+                    )
+                ),
+                error=str(error_message),
+                log=log_location,
+            )
+        )
+
+    else:
+        formatted_error_message = (
+            "Something went wrong in the ShotGrid Desktop! If you <a href={link}>contact us</a> "
+            "we'll help you diagnose the issue.\n"
+            "Error: {error}\n"
+            "For more information, see the log file at {log}.".format(
+                link=sgtk.support_url,
+                error=str(error_message),
+                log=log_location,
+            )
+        )
+
     DesktopMessageBox.critical(
         "ShotGrid Desktop Error",
-        "Something went wrong in the ShotGrid Desktop! If you <a href={link}>contact us</a> "
-        "we'll help you diagnose the issue.\n"
-        "Error: {error}\n"
-        "For more information, see the log file at {log}.".format(
-            link=sgtk.support_url, error=str(error_message), log=log_location,
-        ),
+        formatted_error_message,
         detailed_text="".join(
             traceback.format_exception(exc_type, exc_value, exc_traceback)
         ),
@@ -840,7 +904,10 @@ def main(**kwargs):
 
     from sgtk import authentication
     from sgtk.descriptor import InvalidAppStoreCredentialsError
-    from sgtk.authentication import ShotgunSamlUser
+    from sgtk.authentication import (
+        set_shotgun_authenticator_support_web_login,
+        ShotgunSamlUser,
+    )
 
     try:
         # Reading user settings from disk.
@@ -850,7 +917,11 @@ def main(**kwargs):
         # If there is an error during auto login, for example proxy settings changed and you
         # can't connect anymore, we need to be able to log the user out.
         shotgun_authenticator = sgtk.authentication.ShotgunAuthenticator()
-
+        if os.environ.get("SGTK_DESKTOP_SUPPORT_WEB_LOGIN_TRUE"):
+            logger.info(
+                "Indicating to the Desktop that web login is supported and to be used."
+            )
+            set_shotgun_authenticator_support_web_login(True)
         __optional_state_cleanup(splash, shotgun_authenticator, app_bootstrap)
 
         user = __do_login(splash, shotgun_authenticator)

@@ -14,6 +14,4 @@ from locksmith.Qt.locksmith_splash import LocksmithSplash
 
 
 def Splash():
-    return LocksmithSplash(
-        None, QtCore.Qt.WindowStaysOnTopHint, "locksmith desktop"
-    )
+    return LocksmithSplash(None, QtCore.Qt.WindowStaysOnTopHint, "locksmith desktop")
