@@ -8,7 +8,7 @@ except ImportError:
     sys.stdin = open(os.devnull, "r")
 
     if sys.platform == "win32":
-        rez_cmd = "rez-env rez -- echo %REZ_REZ_ROOT%"
+        rez_cmd = "rez-env rez !maya -- echo %REZ_REZ_ROOT%"
     else:
         rez_cmd = "rez-env rez -- printenv REZ_REZ_ROOT"
 
