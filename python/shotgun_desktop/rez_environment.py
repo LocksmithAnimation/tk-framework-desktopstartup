@@ -8,9 +8,9 @@ except ImportError:
     sys.stdin = open(os.devnull, "r")
 
     if sys.platform == "win32":
-        rez_cmd = "rez-env rez !maya -- echo %REZ_REZ_ROOT%"
+        rez_cmd = "rez-env rez .dcc-none -- echo %REZ_REZ_ROOT%"
     else:
-        rez_cmd = "rez-env rez -- printenv REZ_REZ_ROOT"
+        rez_cmd = "rez-env rez .dcc-none -- printenv REZ_REZ_ROOT"
 
     process = subprocess.Popen(rez_cmd, stdout=subprocess.PIPE, shell=True)
     rez_path, err = process.communicate()

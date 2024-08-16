@@ -45,7 +45,7 @@ def get_pipeline_configuration_info(connection, user=None):
         "project",
         "sg_plugin_ids",
         "plugin_ids",
-        "users"
+        "users",
     ]
 
     # Find the right pipeline configuration. We'll always pick a projectless
