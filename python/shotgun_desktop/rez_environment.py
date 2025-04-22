@@ -6,20 +6,30 @@ try:
     import rez
 except ImportError:
     sys.stdin = open(os.devnull, "r")
-
+    if sys.platform != "win32":
+        cmd = "printenv PWD"
+        process = subprocess.Popen(
+            cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True
+        )
+        result, err = process.communicate()
+        print(f"RESULT: {result}")
+        print(f"ERR: {err}")
     if sys.platform == "win32":
-        rez_cmd = "rez-env rez .dcc-none -- echo %REZ_REZ_ROOT%"
+        rez_cmd = "rez-env rez .dcc-shotgun -- echo %REZ_REZ_ROOT%"
     else:
-        rez_cmd = "rez-env rez .dcc-none -- printenv REZ_REZ_ROOT"
+        rez_cmd = "rez-env rez .dcc-shotgun -- printenv REZ_REZ_ROOT"
 
-    process = subprocess.Popen(rez_cmd, stdout=subprocess.PIPE, shell=True)
+    process = subprocess.Popen(
+        rez_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True
+    )
     rez_path, err = process.communicate()
 
     if err or not rez_path:
-        raise ImportError(
-            "Failed to find Rez as a package in the current environment! "
-            "Try 'rez-bind rez'!"
-        )
+        raise Exception(err)
+        # raise ImportError(
+        # "Failed to find Rez as a package in the current environment! "
+        # "Try 'rez-bind rez'!"
+        # )
 
     else:
         rez_path = rez_path.decode(encoding="utf-8", errors="ignore").strip()
