@@ -14,10 +14,11 @@ except ImportError:
         result, err = process.communicate()
         print(f"RESULT: {result}")
         print(f"ERR: {err}")
+    python_version = f"{sys.version_info[0]}.{sys.version_info[1]}"
     if sys.platform == "win32":
-        rez_cmd = "rez-env rez .dcc-shotgun -- echo %REZ_REZ_ROOT%"
+        rez_cmd = f"rez-env rez python-{python_version} .dcc-shotgun -- echo %REZ_REZ_ROOT%"
     else:
-        rez_cmd = "rez-env rez .dcc-shotgun -- printenv REZ_REZ_ROOT"
+        rez_cmd = f"rez-env rez python-{python_version} .dcc-shotgun -- printenv REZ_REZ_ROOT"
 
     process = subprocess.Popen(
         rez_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True
